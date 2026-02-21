@@ -198,14 +198,14 @@ const Sidebar = ({active,setActive}) => {
   const badges = {campo:errCampo,bodega:errBodega};
   return (
     <aside className="w-64 flex-shrink-0 flex flex-col" style={{background:C.bordo,minHeight:"100vh"}}>
-      {/* Logo Vid-Data */}
+      {/* Logo WineData */}
       <div className="px-6 py-6 border-b border-white/10">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{background:C.bordoLight}}>
             <Wine size={20} color={C.cream}/>
           </div>
           <div>
-            <p className="text-sm font-bold tracking-widest uppercase" style={{color:C.cream,fontFamily:"'Georgia',serif"}}>Vid-Data</p>
+            <p className="text-sm font-bold tracking-widest uppercase" style={{color:C.cream,fontFamily:"'Georgia',serif"}}>WineData</p>
             <p className="text-xs" style={{color:"rgba(245,239,230,.5)"}}>Suite de Gestión</p>
           </div>
         </div>
@@ -245,7 +245,7 @@ const Header = ({title,notifCount,onBell}) => (
   <header className="h-16 flex items-center justify-between px-8 border-b" style={{background:"white",borderColor:C.creamDark}}>
     <div>
       <h1 className="text-lg font-semibold" style={{color:C.slate,fontFamily:"'Georgia',serif"}}>{title}</h1>
-      <p className="text-xs" style={{color:C.slateLight}}>Temporada 2024–2025 · Mendoza, Argentina · Vid-Data</p>
+      <p className="text-xs" style={{color:C.slateLight}}>Temporada 2024–2025 · Mendoza, Argentina · WineData</p>
     </div>
     <div className="flex items-center gap-3">
       <button onClick={onBell} className="relative p-2 rounded-lg hover:bg-gray-100 transition">
@@ -257,12 +257,31 @@ const Header = ({title,notifCount,onBell}) => (
   </header>
 );
 
-// ── KPI Card ──────────────────────────────────────────────────────────────────
-const KPICard = ({label,value,sub,icon:Icon,color,warn}) => (
-  <div className="rounded-2xl p-5 border" style={{background:"white",borderColor:warn?"#fca5a5":C.creamDark}}>
+// ── KPI Card draggable ────────────────────────────────────────────────────────
+const KPICard = ({label,value,sub,icon:Icon,color,warn,dragHandleProps,isDragging}) => (
+  <div className="rounded-2xl p-5 border select-none transition-shadow"
+    style={{
+      background:"white",
+      borderColor:warn?"#fca5a5":C.creamDark,
+      boxShadow: isDragging ? "0 12px 40px rgba(0,0,0,.18)" : undefined,
+      transform: isDragging ? "scale(1.03)" : undefined,
+      cursor: "default",
+    }}>
     <div className="flex items-start justify-between mb-4">
-      <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{background:(warn?"#ef4444":color)+"18"}}>
-        <Icon size={20} style={{color:warn?"#ef4444":color}}/>
+      <div className="flex items-center gap-2">
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{background:(warn?"#ef4444":color)+"18"}}>
+          <Icon size={20} style={{color:warn?"#ef4444":color}}/>
+        </div>
+        {/* Drag handle */}
+        <div {...dragHandleProps} title="Arrastrar para reorganizar"
+          className="p-1.5 rounded-lg hover:bg-gray-100 transition cursor-grab active:cursor-grabbing"
+          style={{color:"#ccc"}}>
+          <svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor">
+            <circle cx="3" cy="3" r="1.5"/><circle cx="9" cy="3" r="1.5"/>
+            <circle cx="3" cy="8" r="1.5"/><circle cx="9" cy="8" r="1.5"/>
+            <circle cx="3" cy="13" r="1.5"/><circle cx="9" cy="13" r="1.5"/>
+          </svg>
+        </div>
       </div>
       {warn&&<span className="flex items-center gap-1 text-xs font-semibold text-red-500"><AlertCircle size={11}/>Atención</span>}
     </div>
@@ -272,13 +291,55 @@ const KPICard = ({label,value,sub,icon:Icon,color,warn}) => (
   </div>
 );
 
-// ── Dashboard ─────────────────────────────────────────────────────────────────
+// ── Dashboard responsive + drag & drop KPIs ───────────────────────────────────
 const Dashboard = ({setActive}) => {
   const totalErr = parcelas.filter(p=>p.sensor.estado==="error").length + depositos.filter(d=>d.sensor.estado==="error").length;
   const totalAlt = depositos.reduce((a,d)=>a+d.alertas.length,0);
   const totalHa  = parcelas.reduce((a,p)=>a+p.hectareas,0).toFixed(1);
+  const riegosActivos = 1; // Río Sur activo
+
+  // KPI cards — sin Toneladas Cosechadas
+  const KPIS_INIT = [
+    { id:"ha",     label:"Hectáreas Cultivadas",  value:`${totalHa} ha`,  sub:"5 parcelas activas",       icon:Leaf,         color:C.oliveLight, warn:false },
+    { id:"riego",  label:"Riegos Activos",         value:riegosActivos,    sub:"Ver módulo Campo",         icon:Droplets,     color:"#0ea5e9",    warn:false },
+    { id:"err",    label:"Sensores con error",     value:totalErr,         sub:"Campo + Bodega",           icon:WifiOff,      color:"#ef4444",    warn:totalErr>0 },
+    { id:"alt",    label:"Alertas de proceso",     value:totalAlt,         sub:"Parámetros fuera de rango",icon:AlertCircle,  color:C.amber,      warn:totalAlt>0 },
+  ];
+
+  const [kpis, setKpis]       = useState(KPIS_INIT);
+  const [dragIdx, setDragIdx] = useState(null);
+  const [overIdx, setOverIdx] = useState(null);
+
+  const onDragStart = (i) => { setDragIdx(i); };
+  const onDragEnter = (i) => { setOverIdx(i); };
+  const onDragEnd   = ()  => {
+    if(dragIdx!==null && overIdx!==null && dragIdx!==overIdx){
+      const next = [...kpis];
+      const [moved] = next.splice(dragIdx, 1);
+      next.splice(overIdx, 0, moved);
+      setKpis(next);
+    }
+    setDragIdx(null); setOverIdx(null);
+  };
+
+  // Responsive: columnas según ancho de ventana
+  const [cols, setCols] = useState(4);
+  useEffect(()=>{
+    const update = () => {
+      const w = window.innerWidth;
+      if(w < 640)       setCols(1);
+      else if(w < 900)  setCols(2);
+      else if(w < 1200) setCols(3);
+      else              setCols(4);
+    };
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+
   return (
-    <div className="p-8 space-y-8">
+    <div className="p-4 md:p-8 space-y-6 md:space-y-8">
+      {/* Banner error sensores */}
       {totalErr>0&&(
         <div className="flex items-center gap-3 p-4 rounded-2xl border-2" style={{background:"#fff5f5",borderColor:"#fca5a5"}}>
           <WifiOff size={18} style={{color:"#ef4444",flexShrink:0}}/>
@@ -289,13 +350,51 @@ const Dashboard = ({setActive}) => {
           <button onClick={()=>setActive("campo")} className="text-xs font-semibold px-3 py-1.5 rounded-lg text-white" style={{background:"#ef4444"}}>Ir a Campo</button>
         </div>
       )}
-      <div className="grid grid-cols-4 gap-5">
-        <KPICard label="Hectáreas Cultivadas" value={`${totalHa} ha`} sub="5 parcelas" icon={Leaf} color={C.oliveLight}/>
-        <KPICard label="Toneladas Cosechadas" value="218 t" sub="Temporada 2024" icon={FlaskConical} color={C.amber}/>
-        <KPICard label="Sensores con error" value={totalErr} sub="Campo + Bodega" icon={WifiOff} color="#ef4444" warn={totalErr>0}/>
-        <KPICard label="Alertas de proceso" value={totalAlt} sub="Parámetros fuera de rango" icon={AlertCircle} color={C.amber} warn={totalAlt>0}/>
+
+      {/* KPIs drag & drop */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <p className="text-xs" style={{color:C.slateLight}}>
+            Arrastrá las tarjetas por el ícono <span style={{fontWeight:700}}>⠿</span> para reorganizarlas
+          </p>
+        </div>
+        <div style={{
+          display:"grid",
+          gridTemplateColumns:`repeat(${cols}, minmax(0, 1fr))`,
+          gap:"1.25rem",
+        }}>
+          {kpis.map((k,i)=>(
+            <div key={k.id}
+              draggable
+              onDragStart={()=>onDragStart(i)}
+              onDragEnter={()=>onDragEnter(i)}
+              onDragEnd={onDragEnd}
+              onDragOver={e=>e.preventDefault()}
+              style={{
+                opacity: dragIdx===i ? 0.4 : 1,
+                outline: overIdx===i && dragIdx!==i ? `2px dashed ${C.bordo}` : "none",
+                borderRadius: 16,
+                transition:"opacity .15s,outline .1s",
+              }}>
+              <KPICard
+                {...k}
+                isDragging={dragIdx===i}
+                dragHandleProps={{
+                  draggable:false,
+                  onMouseDown: e => e.stopPropagation(),
+                }}
+              />
+            </div>
+          ))}
+        </div>
       </div>
-      <div className="grid grid-cols-2 gap-5">
+
+      {/* Gráficos — responsive stack en mobile */}
+      <div style={{
+        display:"grid",
+        gridTemplateColumns: cols>=2 ? "1fr 1fr" : "1fr",
+        gap:"1.25rem"
+      }}>
         <div className="rounded-2xl p-6 border" style={{background:"white",borderColor:C.creamDark}}>
           <h3 className="text-sm font-semibold mb-1" style={{color:C.slate}}>Humedad y Temperatura · Parcelas en línea</h3>
           <p className="text-xs mb-4" style={{color:C.slateLight}}>Valle Central excluida (sin señal)</p>
@@ -325,6 +424,8 @@ const Dashboard = ({setActive}) => {
           </ResponsiveContainer>
         </div>
       </div>
+
+      {/* Alertas recientes */}
       <div className="rounded-2xl p-6 border" style={{background:"white",borderColor:C.creamDark}}>
         <h3 className="text-sm font-semibold mb-4" style={{color:C.slate}}>Alertas Recientes</h3>
         <div className="space-y-2.5">
@@ -442,7 +543,7 @@ const HistorialParcelaModal = ({parcela,onClose}) => {
           <div>
             <div className="flex items-center gap-2">
               <History size={16} color={C.cream}/>
-              <h2 className="text-base font-bold" style={{color:C.cream,fontFamily:"'Georgia',serif"}}>Vid-Data · Historial de Campo</h2>
+              <h2 className="text-base font-bold" style={{color:C.cream,fontFamily:"'Georgia',serif"}}>WineData · Historial de Campo</h2>
             </div>
             <p className="text-sm mt-0.5" style={{color:"rgba(245,239,230,.65)"}}>{parcela.nombre} · {parcela.variedad}</p>
           </div>
@@ -549,7 +650,7 @@ const ParcelaModal = ({parcela,onClose}) => {
           </div>
           <div className="flex gap-3">
             <button onClick={()=>setShowHistorial(true)} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold text-white" style={{background:C.bordo}}>
-              <History size={14}/> Ver historial Vid-Data
+              <History size={14}/> Ver historial WineData
             </button>
             <button className="px-4 py-2.5 rounded-xl text-sm font-semibold border" style={{color:C.slate,borderColor:C.creamDark}}>Registrar intervención</button>
           </div>
@@ -601,7 +702,7 @@ const RiegoModal = ({parcela, riego, onSave, onClose}) => {
           <div>
             <div className="flex items-center gap-2">
               <Droplets size={16} color={C.cream}/>
-              <h2 className="text-base font-bold" style={{color:C.cream,fontFamily:"Georgia,serif"}}>Control de Riego · Vid-Data</h2>
+              <h2 className="text-base font-bold" style={{color:C.cream,fontFamily:"Georgia,serif"}}>Control de Riego · WineData</h2>
             </div>
             <p className="text-sm mt-0.5" style={{color:"rgba(245,239,230,.65)"}}>{parcela.nombre} · {parcela.variedad} · {parcela.hectareas} ha</p>
           </div>
@@ -945,7 +1046,7 @@ const HistorialDepositoModal = ({deposito,onClose}) => {
           <div>
             <div className="flex items-center gap-2">
               <History size={16} color={C.cream}/>
-              <h2 className="text-base font-bold" style={{color:C.cream,fontFamily:"'Georgia',serif"}}>Vid-Data · Historial de Bodega</h2>
+              <h2 className="text-base font-bold" style={{color:C.cream,fontFamily:"'Georgia',serif"}}>WineData · Historial de Bodega</h2>
             </div>
             <p className="text-sm mt-0.5" style={{color:"rgba(245,239,230,.65)"}}>{deposito.nombre} · {deposito.variedad} · {deposito.lote}</p>
           </div>
@@ -1070,7 +1171,7 @@ const DepositoCard = ({d,onHistorial}) => {
       ))}
       {/* Botón historial */}
       <button onClick={()=>onHistorial(d)} className="w-full mt-3 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold border hover:shadow transition" style={{borderColor:C.creamDark,color:C.bordo}}>
-        <History size={12}/> Ver historial Vid-Data
+        <History size={12}/> Ver historial WineData
       </button>
     </div>
   );
@@ -1085,7 +1186,7 @@ const Bodega = () => {
       {historialDep&&<HistorialDepositoModal deposito={historialDep} onClose={()=>setHistorialDep(null)}/>}
       <div>
         <h2 className="text-base font-semibold" style={{color:C.slate}}>Control de Depósitos y Barricas</h2>
-        <p className="text-xs mt-0.5" style={{color:C.slateLight}}>Temperatura · pH · °Brix en tiempo real. Accedé al historial Vid-Data desde cada depósito.</p>
+        <p className="text-xs mt-0.5" style={{color:C.slateLight}}>Temperatura · pH · °Brix en tiempo real. Accedé al historial Winedata desde cada depósito.</p>
       </div>
       <div className="grid grid-cols-3 gap-5">
         {cols.map(col=>{
@@ -1166,7 +1267,7 @@ const Configuracion = () => {
     <div className="p-8 space-y-6 max-w-3xl">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-base font-semibold" style={{color:C.slate}}>Configuración · Vid-Data</h2>
+          <h2 className="text-base font-semibold" style={{color:C.slate}}>Configuración · WineData</h2>
           <p className="text-xs mt-0.5" style={{color:C.slateLight}}>Frecuencia de datos, notificaciones, umbrales y seguridad.</p>
         </div>
         <button onClick={save} className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white transition" style={{background:saved?"#22c55e":C.bordo}}>
@@ -1187,7 +1288,7 @@ const Configuracion = () => {
       </Section>
 
       {/* ── ASIDUIDAD / FRECUENCIA DE DATOS ── */}
-      <Section icon={RefreshCw} title="Frecuencia de recepción de datos" sub="Configurá con qué asiduidad Vid-Data recibe y procesa las lecturas de cada módulo">
+      <Section icon={RefreshCw} title="Frecuencia de recepción de datos" sub="Configurá con qué asiduidad WineData recibe y procesa las lecturas de cada módulo">
         <Row label="Sensores de campo (parcelas)" sub="Intervalo de polling a los nodos IoT de viñedo">
           <div className="flex rounded-lg overflow-hidden border" style={{borderColor:C.creamDark}}>
             {freqOptions.map(o=>(
@@ -1224,13 +1325,13 @@ const Configuracion = () => {
         <Row label="Alertas inmediatas" sub="Envío en tiempo real ante eventos críticos (sensor offline, parámetro fuera de rango)">
           <Toggle on={cfg.frecAlertaInmediata} onChange={v=>set("frecAlertaInmediata",v)}/>
         </Row>
-        <Row label="Batch horario de historial" sub="Consolida y escribe el historial Vid-Data una vez por hora">
+        <Row label="Batch horario de historial" sub="Consolida y escribe el historial WineData una vez por hora">
           <Toggle on={cfg.frecBatchHorario} onChange={v=>set("frecBatchHorario",v)}/>
         </Row>
         <Row label="Digesto diario" sub="Resumen del día enviado cada mañana con métricas clave">
           <Toggle on={cfg.frecDigestoDiario} onChange={v=>set("frecDigestoDiario",v)}/>
         </Row>
-        <Row label="Formato de exportación Vid-Data" sub="Formato por defecto al descargar historiales">
+        <Row label="Formato de exportación WineData" sub="Formato por defecto al descargar historiales">
           <div className="flex rounded-lg overflow-hidden border" style={{borderColor:C.creamDark}}>
             {["CSV","JSON","XLSX"].map(f=>(
               <button key={f} onClick={()=>set("formatoExport",f)}
@@ -1296,7 +1397,7 @@ const titles = {
   dashboard:"Dashboard General",
   campo:"Módulo de Campo · Viñedos",
   bodega:"Módulo de Bodega · Producción",
-  configuracion:"Configuración · Vid-Data",
+  configuracion:"Configuración · WineData",
 };
 
 export default function App() {
