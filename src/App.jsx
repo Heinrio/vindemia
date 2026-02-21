@@ -106,7 +106,7 @@ const NotifPanel = ({ notifs, setNotifs, onClose }) => {
   const iconos = { error: <WifiOff size={14} style={{color:"#ef4444"}}/>, alerta: <AlertCircle size={14} style={{color:C.amber}}/>, ok: <CheckCircle size={14} style={{color:C.oliveLight}}/> };
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex justify-end" style={{zIndex:99999}} onClick={onClose}>
       <div className="w-96 flex flex-col shadow-2xl" style={{background:"white", marginTop:64}} onClick={e=>e.stopPropagation()}>
         <div className="px-5 py-4 flex items-center justify-between border-b" style={{borderColor:C.creamDark}}>
           <div>
@@ -448,7 +448,7 @@ const MapaParcelas = ({ onSelect }) => {
   }, []);
 
   return (
-    <div className="rounded-2xl border overflow-hidden relative" style={{ borderColor: C.creamDark, height: 380 }}>
+    <div className="rounded-2xl border overflow-hidden relative" style={{ borderColor: C.creamDark, height: 380, zIndex: 0, position: "relative" }}>
       <div ref={mapRef} style={{ width: "100%", height: "100%" }} />
       {/* Leyenda superpuesta */}
       <div className="absolute bottom-4 left-4 z-50 flex flex-col gap-1.5 p-3 rounded-xl shadow-lg"
@@ -470,7 +470,7 @@ const ParcelaModal = ({ parcela, onClose }) => {
   const { sensor } = parcela;
   const esError = sensor.estado==="error";
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{background:"rgba(0,0,0,.45)"}} onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{background:"rgba(0,0,0,.55)",zIndex:99999}} onClick={onClose}>
       <div className="rounded-2xl w-[500px] shadow-2xl overflow-hidden" onClick={e=>e.stopPropagation()}>
         <div className="px-6 py-5 flex items-start justify-between" style={{background:C.bordo}}>
           <div>
