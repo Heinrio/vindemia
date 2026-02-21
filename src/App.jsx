@@ -168,7 +168,7 @@ const Sidebar = ({ active, setActive, notifCount }) => {
             <Wine size={20} color={C.cream}/>
           </div>
           <div>
-            <p className="text-sm font-bold tracking-widest uppercase" style={{color:C.cream,fontFamily:"'Georgia',serif"}}>DataVid</p>
+            <p className="text-sm font-bold tracking-widest uppercase" style={{color:C.cream,fontFamily:"'Georgia',serif"}}>Vid-Data</p>
             <p className="text-xs" style={{color:"rgba(245,239,230,.5)"}}>Suite de Gestión</p>
           </div>
         </div>
